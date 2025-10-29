@@ -121,3 +121,50 @@ docker run --rm -p 8081:8081 \
   -e API_KEY=devkey123 \
   -e METRICS_DB=/tmp/metrics.db \
   hr-metrics
+
+HappyRobot Integration
+
+Add a Webhook (POST) node (using your reusable template) after each stage:
+
+FMCSA Verify
+
+stage = "fmcsa_verify"
+
+outcome = "active" | "inactive" | "unknown"
+
+carrier_mc (string), fmcsa_status (string)
+
+Load Selected
+
+stage = "load_selected"
+
+outcome = "ready_to_pitch"
+
+origin, destination, equipment_type, loadboard_rate (number), load_id (string)
+
+Negotiate Result
+
+stage = "negotiate_result"
+
+outcome = "accepted" | "declined"
+
+agreed_rate, model_offer, loadboard_rate, negotiation_rounds, transferred_to_rep (bool)
+
+Webhook settings
+
+URL: {{ METRICS_URL }}/events
+
+Headers: Content-Type: application/json, X-API-KEY: {{ API_KEY }}
+
+Preserve data types: ON (numbers remain numbers)
+
+Define METRICS_URL and API_KEY in your HappyRobot Environment Variables.
+
+
+**Dashboard**
+export METRICS_URL="https://<SERVICE>.up.railway.app"
+streamlit run dashboard.py
+**EVENT SCHEMA**
+export METRICS_URL="https://<SERVICE>.up.railway.app"
+streamlit run dashboard.py
+
