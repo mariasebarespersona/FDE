@@ -1,28 +1,17 @@
-# Dockerfile
-FROM python:3.11-slim
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+# Dockerfile (Railway-friendly)
+FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install deps
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy app
-COPY app.py . 
+COPY app.py .
 
-# Expose & defaults
+ENV API_KEY=devkey123 \
+    METRICS_DB=/tmp/metrics.db \
+    PORT=8081
+
 EXPOSE 8081
-ENV PORT=8081
-# We will store the SQLite file on a mounted volume at /data
-ENV METRICS_DB=/data/metrics.db
 
-# Create /data and give permissions to an unprivileged user
-RUN adduser --disabled-password --gecos "" appuser \
-    && mkdir -p /data \
-    && chown -R appuser:appuser /data /app
-
-USER appuser
-CMD ["python", "-u", "app.py"]
+CMD ["uvicorn","app:app","--host","0.0.0.0","--port","8081"]
