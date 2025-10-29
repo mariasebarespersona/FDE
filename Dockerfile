@@ -1,31 +1,28 @@
-# ---- Build a tiny, fast image for the API only ----
-    FROM python:3.12-slim
+# Dockerfile
+FROM python:3.11-slim
 
-    # system deps
-    RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl && \
-        rm -rf /var/lib/apt/lists/*
-    
-    WORKDIR /app
-    
-    # copy requirements & install
-    COPY requirements.txt .
-    RUN pip install --no-cache-dir -r requirements.txt
-    
-    # copy app
-    COPY app.py .
-    
-    # env defaults (override in Railway)
-    ENV API_KEY=devkey123 \
-        METRICS_DB=/data/metrics.db \
-        PORT=8081
-    
-    # make a writable volume for sqlite
-    VOLUME ["/data"]
-    
-    # expose port for Railway/Fly.io (they inject PORT)
-    EXPOSE 8081
-    
-    # start
-    CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8081"]
-    
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Install deps
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy app
+COPY app.py . 
+
+# Expose & defaults
+EXPOSE 8081
+ENV PORT=8081
+# We will store the SQLite file on a mounted volume at /data
+ENV METRICS_DB=/data/metrics.db
+
+# Create /data and give permissions to an unprivileged user
+RUN adduser --disabled-password --gecos "" appuser \
+    && mkdir -p /data \
+    && chown -R appuser:appuser /data /app
+
+USER appuser
+CMD ["python", "-u", "app.py"]
