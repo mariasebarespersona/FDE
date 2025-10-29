@@ -1,0 +1,14 @@
+version: "3.9"
+services:
+  api:
+    build: .
+    image: hr-metrics-api:latest
+    environment:
+      API_KEY: devkey123
+      METRICS_DB: /data/metrics.db
+    ports:
+      - "8081:8081"
+    volumes:
+      - api_data:/data
+volumes:
+  api_data:
