@@ -50,109 +50,188 @@ def ping_health() -> bool:
     except Exception:
         return False
 
+# @st.cache_data(show_spinner=False, ttl=5)
+# def fetch_events() -> pd.DataFrame:
+#     """
+#     Expected canonical schema (if present):
+#       id, ts, run_id, call_id, stage, outcome, carrier_mc, fmcsa_status,
+#       load_id, origin, destination, equipment_type, loadboard_rate, model_offer,
+#       carrier_counter, agreed_rate, discount_pct, negotiation_rounds,
+#       sentiment, sentiment_score, duration_sec, transferred_to_rep, error
+
+#     We also merge common alternates produced by your nodes:
+#       ls_origin, ls_destination, ls_equipment_type, ls_loadboard_rate
+#       nr_outcome, nr_agreed_rate, nr_model_offer, nr_discount_pct, nr_negotiation_rounds
+#     """
+#     try:
+#         r = requests.get(API_EVENTS, headers=HEADERS, timeout=8)
+#         r.raise_for_status()
+#         data = r.json()
+#     except Exception:
+#         data = []
+
+#     df = pd.DataFrame(data)
+#     if df.empty:
+#         return pd.DataFrame(columns=[
+#             "id","ts","run_id","call_id","stage","outcome","carrier_mc","fmcsa_status",
+#             "load_id","origin","destination","equipment_type","loadboard_rate","model_offer",
+#             "carrier_counter","agreed_rate","discount_pct","negotiation_rounds",
+#             "sentiment","sentiment_score","duration_sec","transferred_to_rep","error"
+#         ])
+
+#     # --- Normalize timestamps & numerics
+#     if "ts" not in df.columns:
+#         df["ts"] = pd.NaT
+#     df["ts"] = df["ts"].apply(_to_ts)
+
+#     for col in [
+#         "loadboard_rate","model_offer","agreed_rate","discount_pct",
+#         "negotiation_rounds","sentiment_score","duration_sec",
+#         "carrier_counter",
+#         # num versions of ls_/nr_ fields (in case API typed them as strings)
+#         "ls_loadboard_rate","nr_agreed_rate","nr_model_offer","nr_discount_pct","nr_negotiation_rounds"
+#     ]:
+#         if col in df.columns:
+#             df[col] = pd.to_numeric(df[col], errors="coerce")
+
+#     # --- String hygiene
+#     for col in [
+#         "stage","outcome","equipment_type","origin","destination",
+#         "sentiment","fmcsa_status","carrier_mc","ls_origin","ls_destination",
+#         "ls_equipment_type","nr_outcome"
+#     ]:
+#         if col in df.columns:
+#             df[col] = df[col].astype(str).str.strip()
+#             df.loc[df[col].str.lower().isin(["", "none", "null", "nan"]), col] = np.nan
+
+#     # --- Merge fallbacks into canonical columns
+#     # origin/destination/equipment
+#     if "origin" not in df.columns: df["origin"] = np.nan
+#     if "destination" not in df.columns: df["destination"] = np.nan
+#     if "equipment_type" not in df.columns: df["equipment_type"] = np.nan
+#     if "loadboard_rate" not in df.columns: df["loadboard_rate"] = np.nan
+#     if "agreed_rate" not in df.columns: df["agreed_rate"] = np.nan
+#     if "model_offer" not in df.columns: df["model_offer"] = np.nan
+#     if "discount_pct" not in df.columns: df["discount_pct"] = np.nan
+#     if "negotiation_rounds" not in df.columns: df["negotiation_rounds"] = np.nan
+#     if "outcome" not in df.columns: df["outcome"] = np.nan
+
+#     # Prefer canonical values; if NaN, take ls_/nr_ where appropriate
+#     df["origin"]           = df["origin"].fillna(df.get("ls_origin"))
+#     df["destination"]      = df["destination"].fillna(df.get("ls_destination"))
+#     df["equipment_type"]   = df["equipment_type"].fillna(df.get("ls_equipment_type"))
+#     df["loadboard_rate"]   = df["loadboard_rate"].fillna(df.get("ls_loadboard_rate"))
+
+#     df["agreed_rate"]          = df["agreed_rate"].fillna(df.get("nr_agreed_rate"))
+#     df["model_offer"]          = df["model_offer"].fillna(df.get("nr_model_offer"))
+#     df["discount_pct"]         = df["discount_pct"].fillna(df.get("nr_discount_pct"))
+#     df["negotiation_rounds"]   = df["negotiation_rounds"].fillna(df.get("nr_negotiation_rounds"))
+
+#     # Outcome normalization: if canonical missing, adopt nr_outcome
+#     df["outcome"] = df["outcome"].fillna(df.get("nr_outcome"))
+
+#     # Equipment display (title-case for grouping)
+#     df["equipment_display"] = (
+#         df["equipment_type"].fillna("").astype(str).str.strip().str.title()
+#     )
+#     df.loc[df["equipment_display"] == "", "equipment_display"] = np.nan
+
+#     # Derived flags
+#     df["stage"] = df["stage"].fillna("")
+#     low_outcome = df["outcome"].fillna("").str.lower()
+
+#     df["is_fmcsa_active"]  = (df["stage"].eq("fmcsa_verify")  & (low_outcome.eq("active")))
+#     df["is_load_selected"] = (df["stage"].eq("load_selected"))
+#     df["is_negotiate"]     = (df["stage"].eq("negotiate_result"))
+
+#     # "Accepted" if outcome says so OR we have an agreed_rate > 0
+#     df["is_accepted"] = df["is_negotiate"] & (
+#         low_outcome.isin(["accepted","success","won","deal"]) | (pd.to_numeric(df["agreed_rate"], errors="coerce") > 0)
+#     )
+
+#     return df.sort_values("ts", ascending=True).reset_index(drop=True)
+
+# def now_utc():
+#     return datetime.now(timezone.utc)
+
 @st.cache_data(show_spinner=False, ttl=5)
 def fetch_events() -> pd.DataFrame:
-    """
-    Expected canonical schema (if present):
-      id, ts, run_id, call_id, stage, outcome, carrier_mc, fmcsa_status,
-      load_id, origin, destination, equipment_type, loadboard_rate, model_offer,
-      carrier_counter, agreed_rate, discount_pct, negotiation_rounds,
-      sentiment, sentiment_score, duration_sec, transferred_to_rep, error
-
-    We also merge common alternates produced by your nodes:
-      ls_origin, ls_destination, ls_equipment_type, ls_loadboard_rate
-      nr_outcome, nr_agreed_rate, nr_model_offer, nr_discount_pct, nr_negotiation_rounds
-    """
-    try:
-        r = requests.get(API_EVENTS, headers=HEADERS, timeout=8)
-        r.raise_for_status()
-        data = r.json()
-    except Exception:
+    r = requests.get(API_EVENTS, timeout=8)
+    r.raise_for_status()
+    data = r.json()
+    if not isinstance(data, list):
         data = []
 
     df = pd.DataFrame(data)
-    if df.empty:
-        return pd.DataFrame(columns=[
-            "id","ts","run_id","call_id","stage","outcome","carrier_mc","fmcsa_status",
-            "load_id","origin","destination","equipment_type","loadboard_rate","model_offer",
-            "carrier_counter","agreed_rate","discount_pct","negotiation_rounds",
-            "sentiment","sentiment_score","duration_sec","transferred_to_rep","error"
-        ])
 
-    # --- Normalize timestamps & numerics
-    if "ts" not in df.columns:
-        df["ts"] = pd.NaT
-    df["ts"] = df["ts"].apply(_to_ts)
+    # Ensure expected columns exist (so downstream selections don't error)
+    base_cols = [
+        "id","ts","run_id","call_id","stage","outcome","carrier_mc",
+        "fmcsa_status","load_id","origin","destination","equipment_type",
+        "loadboard_rate","model_offer","carrier_counter","agreed_rate",
+        "discount_pct","negotiation_rounds","sentiment","sentiment_score",
+        "duration_sec","transferred_to_rep","error",
+        # optional “ls_*” fields may or may not be present
+    ]
+    for c in base_cols:
+        if c not in df.columns:
+            df[c] = np.nan
 
-    for col in [
-        "loadboard_rate","model_offer","agreed_rate","discount_pct",
-        "negotiation_rounds","sentiment_score","duration_sec",
-        "carrier_counter",
-        # num versions of ls_/nr_ fields (in case API typed them as strings)
-        "ls_loadboard_rate","nr_agreed_rate","nr_model_offer","nr_discount_pct","nr_negotiation_rounds"
-    ]:
+    # Parse timestamps
+    def to_ts(x):
+        try:
+            return pd.to_datetime(x, utc=True)
+        except Exception:
+            return pd.NaT
+    df["ts"] = df["ts"].apply(to_ts)
+
+    # Numerics
+    for col in ["loadboard_rate","model_offer","agreed_rate","discount_pct",
+                "negotiation_rounds","sentiment_score","duration_sec"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # --- String hygiene
-    for col in [
-        "stage","outcome","equipment_type","origin","destination",
-        "sentiment","fmcsa_status","carrier_mc","ls_origin","ls_destination",
-        "ls_equipment_type","nr_outcome"
-    ]:
+    # Strings
+    for col in ["stage","outcome","equipment_type","origin","destination",
+                "sentiment","fmcsa_status","carrier_mc","load_id"]:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip()
-            df.loc[df[col].str.lower().isin(["", "none", "null", "nan"]), col] = np.nan
+            df.loc[df[col].isin(["", "none", "null", "nan", "NaN"]), col] = np.nan
 
-    # --- Merge fallbacks into canonical columns
-    # origin/destination/equipment
-    if "origin" not in df.columns: df["origin"] = np.nan
-    if "destination" not in df.columns: df["destination"] = np.nan
-    if "equipment_type" not in df.columns: df["equipment_type"] = np.nan
-    if "loadboard_rate" not in df.columns: df["loadboard_rate"] = np.nan
-    if "agreed_rate" not in df.columns: df["agreed_rate"] = np.nan
-    if "model_offer" not in df.columns: df["model_offer"] = np.nan
-    if "discount_pct" not in df.columns: df["discount_pct"] = np.nan
-    if "negotiation_rounds" not in df.columns: df["negotiation_rounds"] = np.nan
-    if "outcome" not in df.columns: df["outcome"] = np.nan
+    # --- SAFE coalesce: only fill from a source if it exists
+    def coalesce_col(target, *sources):
+        if target not in df.columns:
+            df[target] = np.nan
+        for s in sources:
+            if s in df.columns:
+                df[target] = df[target].fillna(df[s])
 
-    # Prefer canonical values; if NaN, take ls_/nr_ where appropriate
-    df["origin"]           = df["origin"].fillna(df.get("ls_origin"))
-    df["destination"]      = df["destination"].fillna(df.get("ls_destination"))
-    df["equipment_type"]   = df["equipment_type"].fillna(df.get("ls_equipment_type"))
-    df["loadboard_rate"]   = df["loadboard_rate"].fillna(df.get("ls_loadboard_rate"))
+    # Prefer normalized "ls_*" fields if present
+    coalesce_col("origin", "ls_origin")
+    coalesce_col("destination", "ls_destination")
+    coalesce_col("equipment_type", "ls_equipment_type")
+    coalesce_col("loadboard_rate", "ls_loadboard_rate")
 
-    df["agreed_rate"]          = df["agreed_rate"].fillna(df.get("nr_agreed_rate"))
-    df["model_offer"]          = df["model_offer"].fillna(df.get("nr_model_offer"))
-    df["discount_pct"]         = df["discount_pct"].fillna(df.get("nr_discount_pct"))
-    df["negotiation_rounds"]   = df["negotiation_rounds"].fillna(df.get("nr_negotiation_rounds"))
-
-    # Outcome normalization: if canonical missing, adopt nr_outcome
-    df["outcome"] = df["outcome"].fillna(df.get("nr_outcome"))
-
-    # Equipment display (title-case for grouping)
+    # Pretty equipment for filters
     df["equipment_display"] = (
-        df["equipment_type"].fillna("").astype(str).str.strip().str.title()
+        df.get("equipment_type", pd.Series(index=df.index))
+          .astype(str).str.strip().str.title()
+          .replace({"": np.nan, "None": np.nan})
     )
-    df.loc[df["equipment_display"] == "", "equipment_display"] = np.nan
 
-    # Derived flags
-    df["stage"] = df["stage"].fillna("")
-    low_outcome = df["outcome"].fillna("").str.lower()
-
-    df["is_fmcsa_active"]  = (df["stage"].eq("fmcsa_verify")  & (low_outcome.eq("active")))
-    df["is_load_selected"] = (df["stage"].eq("load_selected"))
-    df["is_negotiate"]     = (df["stage"].eq("negotiate_result"))
-
-    # "Accepted" if outcome says so OR we have an agreed_rate > 0
-    df["is_accepted"] = df["is_negotiate"] & (
-        low_outcome.isin(["accepted","success","won","deal"]) | (pd.to_numeric(df["agreed_rate"], errors="coerce") > 0)
-    )
+    # Useful flags
+    df["is_fmcsa_active"] = (df["stage"].eq("fmcsa_verify") &
+                             df["outcome"].fillna("").str.lower().eq("active"))
+    df["is_load_selected"] = df["stage"].eq("load_selected")
+    df["is_negotiate"] = df["stage"].eq("negotiate_result")
+    df["is_accepted"] = (df["is_negotiate"] &
+                         df["outcome"].fillna("").str.lower().eq("accepted"))
 
     return df.sort_values("ts", ascending=True).reset_index(drop=True)
 
 def now_utc():
     return datetime.now(timezone.utc)
+
 
 # --------------------------- UI -------------------------------
 
