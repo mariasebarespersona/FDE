@@ -16,9 +16,28 @@ import streamlit as st
 
 # --------------------------- Config ---------------------------
 
-API_BASE = os.environ.get("METRICS_URL", "http://localhost:8081").rstrip("/")
-API_EVENTS = f"{API_BASE}/events"          # GET returns JSON list of events rows
+# API_BASE = os.environ.get("METRICS_URL", "http://localhost:8081").rstrip("/")
+# API_EVENTS = f"{API_BASE}/events"          # GET returns JSON list of events rows
+# API_HEALTH = f"{API_BASE}/healthz"
+
+
+import os
+
+
+# --- Resolve API base and key (secrets > env > sane default) ---
+API_BASE = (
+    st.secrets.get("API_BASE")
+    or os.getenv("API_BASE")
+    or "https://fde-production.up.railway.app"
+).rstrip("/")
+
+API_KEY = st.secrets.get("API_KEY") or os.getenv("API_KEY") or ""
+
+API_EVENTS = f"{API_BASE}/events"
 API_HEALTH = f"{API_BASE}/healthz"
+
+HEADERS = {"X-API-KEY": API_KEY} if API_KEY else {}
+
 
 st.set_page_config(
     page_title="FDE Use-Case Metrics",
