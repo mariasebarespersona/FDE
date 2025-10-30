@@ -9,6 +9,12 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone
 import sqlite3, os, json
 
+
+from fastapi.middleware.cors import CORSMiddleware
+
+
+
+
 API_KEY = os.environ.get("API_KEY", "devkey123")
 DB_PATH = os.environ.get("METRICS_DB", "metrics.db")
 TABLE   = "events"
@@ -17,10 +23,18 @@ app = FastAPI(title="FDE Metrics API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
+    allow_origins=["*"],          # or lock down to your Streamlit URL later
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=["*"],
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
 
 # ---------- SQLite helpers ----------
 
